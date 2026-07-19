@@ -1,0 +1,25 @@
+# Install torch first, from the CUDA 12.6 index, then the rest:
+#   python -m venv .venv
+#   .venv\Scripts\pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+#   .venv\Scripts\pip install -r requirements.txt
+
+torch
+torchvision
+
+# diffusion model
+diffusers
+transformers
+accelerate
+safetensors
+
+# downstream classifier
+timm
+
+# data handling and evaluation
+pandas
+scikit-learn
+numpy
+scipy
+torchmetrics[image]
+pillow
+matplotlib

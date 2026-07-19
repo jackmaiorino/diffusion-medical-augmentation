@@ -1,0 +1,4 @@
+.DS_Store
+data/**/*.jpg
+__pycache__/
+.venv/
