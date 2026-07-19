@@ -1,14 +1,31 @@
-import pandas
 import os
+import shutil
 
-raw = pandas.read_csv('../data/raw/HAM10000_metadata.csv')
-deduplicated = raw.drop_duplicates(subset=['lesion_id'],ignore_index=True)
-part1 = os.listdir('../data/raw/HAM10000_images_part_1')
-part2 = os.listdir('../data/raw/HAM10000_images_part_2')
-image_id = deduplicated['image_id']
-dx = deduplicated['dx']
-for id,label in zip(image_id,dx):
-    if id + '.jpg' in part1:
-        os.replace(f"../data/raw/HAM10000_images_part_1/{id}.jpg", f"../data/labeled/{label}/{id}.jpg")
-    elif id + '.jpg' in part2:
-        os.replace(f"../data/raw/HAM10000_images_part_2/{id}.jpg", f"../data/labeled/{label}/{id}.jpg")
+import pandas
+
+base = os.path.dirname(os.path.abspath(__file__))
+raw_dir = os.path.join(base, '..', 'data', 'raw')
+labeled_dir = os.path.join(base, '..', 'data', 'labeled')
+
+# All images are kept, not one per lesion. Leakage is handled in
+# make_splits.py, which assigns whole lesions to a split.
+raw = pandas.read_csv(os.path.join(raw_dir, 'HAM10000_metadata.csv'))
+part1 = set(os.listdir(os.path.join(raw_dir, 'HAM10000_images_part_1')))
+part2 = set(os.listdir(os.path.join(raw_dir, 'HAM10000_images_part_2')))
+
+copied = 0
+missing = 0
+for image_id, label in zip(raw['image_id'], raw['dx']):
+    filename = image_id + '.jpg'
+    if filename in part1:
+        src = os.path.join(raw_dir, 'HAM10000_images_part_1', filename)
+    elif filename in part2:
+        src = os.path.join(raw_dir, 'HAM10000_images_part_2', filename)
+    else:
+        missing += 1
+        continue
+    os.makedirs(os.path.join(labeled_dir, label), exist_ok=True)
+    shutil.copy2(src, os.path.join(labeled_dir, label, filename))
+    copied += 1
+
+print(f"copied {copied} images, {missing} not found in raw folders")
