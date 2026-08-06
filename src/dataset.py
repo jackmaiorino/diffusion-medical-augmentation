@@ -19,9 +19,19 @@ IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 
 
+class SquareCenterCrop:
+    """Crop a PIL image to a centered square of its shorter side."""
+
+    def __call__(self, image):
+        side = min(image.size)
+        return transforms.functional.center_crop(image, [side, side])
+
+
 def build_transform(image_size=256, normalize='diffusion', augment=False):
     """Resize to a square and normalize."""
-    steps = [transforms.Resize((image_size, image_size))]
+    # Crop to square before resizing. HAM10000 is 600x450, so a direct resize
+    # would squash every lesion horizontally by 1.33x.
+    steps = [SquareCenterCrop(), transforms.Resize((image_size, image_size))]
 
     if augment:
         steps += [

@@ -23,3 +23,6 @@ scipy==1.18.0
 torchmetrics[image]==1.9.0
 pillow==12.2.0
 matplotlib==3.11.1
+
+# tests
+pytest==9.1.0

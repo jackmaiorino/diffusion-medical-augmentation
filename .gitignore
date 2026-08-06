@@ -2,3 +2,6 @@
 data/**/*.jpg
 __pycache__/
 .venv/
+data/cache/
+data/synthetic/
+runs/
