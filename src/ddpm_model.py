@@ -1,5 +1,5 @@
 """Class-conditional UNet for the from-scratch DDPM."""
-from diffusers import UNet2DModel
+from diffusers import DDIMScheduler, DDPMScheduler, UNet2DModel
 
 from dataset import CLASSES
 
@@ -13,6 +13,16 @@ NULL_CLASS = NUM_CLASSES
 # schedule the checkpoint was trained under.
 SCHEDULER_KWARGS = dict(num_train_timesteps=1000,
                         beta_schedule='squaredcos_cap_v2')
+
+
+def build_train_scheduler():
+    """The noise schedule a checkpoint is trained under."""
+    return DDPMScheduler(**SCHEDULER_KWARGS)
+
+
+def build_sample_scheduler():
+    """The sampling schedule, matching what training used."""
+    return DDIMScheduler(**SCHEDULER_KWARGS)
 
 
 def build_unet(image_size=64):

@@ -4,11 +4,10 @@ import os
 
 import matplotlib.pyplot as plt
 import torch
-from diffusers import DDIMScheduler
 from PIL import Image
 
 from dataset import CLASSES
-from ddpm_model import NULL_CLASS, SCHEDULER_KWARGS, build_unet
+from ddpm_model import NULL_CLASS, build_sample_scheduler, build_unet
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -97,7 +96,7 @@ def main():
     # Sample from the EMA weights: they are smoother than the live weights.
     model.load_state_dict(state['ema'])
 
-    scheduler = DDIMScheduler(**SCHEDULER_KWARGS)
+    scheduler = build_sample_scheduler()
     scheduler.set_timesteps(args.steps)
     generator = torch.Generator(device=args.device).manual_seed(args.seed)
 

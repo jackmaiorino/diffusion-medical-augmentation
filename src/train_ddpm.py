@@ -8,12 +8,13 @@ import time
 
 import numpy
 import torch
-from diffusers import DDIMScheduler, DDPMScheduler
+from diffusers import DDIMScheduler
 from torch.utils.data import DataLoader, WeightedRandomSampler
 from torchvision.utils import save_image
 
 from dataset import CLASS_TO_INDEX, HAM10000
-from ddpm_model import NULL_CLASS, NUM_CLASSES, SCHEDULER_KWARGS, build_unet
+from ddpm_model import (NULL_CLASS, NUM_CLASSES, build_train_scheduler,
+                        build_unet)
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -195,7 +196,7 @@ def main():
     parameters = sum(p.numel() for p in model.parameters())
     print(f"{parameters:,} parameters on {args.device}")
 
-    scheduler = DDPMScheduler(**SCHEDULER_KWARGS)
+    scheduler = build_train_scheduler()
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
     ema = EMA(model, decay=args.ema_decay)
 
