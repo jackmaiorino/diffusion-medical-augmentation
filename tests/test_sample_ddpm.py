@@ -1,8 +1,9 @@
 """Tests for classifier-free guidance arithmetic."""
+import pytest
 import torch
 
 import sample_ddpm
-from sample_ddpm import apply_guidance
+from sample_ddpm import apply_guidance, resolve_image_size
 
 
 def test_weight_of_one_is_the_unguided_prediction():
@@ -32,3 +33,16 @@ def test_higher_weight_extrapolates_past_the_conditional():
 def test_no_pretrained_weights_are_loaded():
     with open(sample_ddpm.__file__) as handle:
         assert 'from_pretrained' not in handle.read()
+
+
+def test_resolve_image_size_takes_the_checkpoint_value_when_omitted():
+    assert resolve_image_size(None, 64) == 64
+
+
+def test_resolve_image_size_accepts_a_matching_override():
+    assert resolve_image_size(64, 64) == 64
+
+
+def test_resolve_image_size_rejects_a_mismatched_override():
+    with pytest.raises(ValueError, match='32.*64|64.*32'):
+        resolve_image_size(32, 64)

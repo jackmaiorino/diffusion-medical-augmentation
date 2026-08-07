@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader, WeightedRandomSampler
 from torchvision.utils import save_image
 
 from dataset import CLASS_TO_INDEX, HAM10000
-from ddpm_model import NULL_CLASS, NUM_CLASSES, build_unet
+from ddpm_model import NULL_CLASS, NUM_CLASSES, SCHEDULER_KWARGS, build_unet
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -195,8 +195,7 @@ def main():
     parameters = sum(p.numel() for p in model.parameters())
     print(f"{parameters:,} parameters on {args.device}")
 
-    scheduler = DDPMScheduler(num_train_timesteps=1000,
-                              beta_schedule='squaredcos_cap_v2')
+    scheduler = DDPMScheduler(**SCHEDULER_KWARGS)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
     ema = EMA(model, decay=args.ema_decay)
 

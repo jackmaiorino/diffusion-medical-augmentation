@@ -8,6 +8,12 @@ NUM_CLASSES = len(CLASSES)
 # for classifier-free guidance.
 NULL_CLASS = NUM_CLASSES
 
+# Shared by the DDPMScheduler in train_ddpm.py and the DDIMScheduler in
+# sample_ddpm.py, so the two can never silently disagree on the noise
+# schedule the checkpoint was trained under.
+SCHEDULER_KWARGS = dict(num_train_timesteps=1000,
+                        beta_schedule='squaredcos_cap_v2')
+
 
 def build_unet(image_size=64):
     """Build the 37.1M-parameter conditional UNet from random init."""

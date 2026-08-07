@@ -121,6 +121,19 @@ def test_stale_cache_raises(mini_split, tmp_path):
                  labeled_dir=LABELED, cache=True, cache_dir=str(tmp_path))
 
 
+def test_wrong_image_size_in_sidecar_raises(mini_split, tmp_path):
+    build_cache(mini_split, LABELED, str(tmp_path), 64)
+
+    _, sidecar = dataset.cache_paths(str(tmp_path), 64)
+    meta = json.load(open(sidecar))
+    meta['image_size'] = 32
+    json.dump(meta, open(sidecar, 'w'))
+
+    with pytest.raises(RuntimeError, match='make_cache'):
+        HAM10000('train', image_size=64, splits_csv=mini_split,
+                 labeled_dir=LABELED, cache=True, cache_dir=str(tmp_path))
+
+
 def test_missing_cache_falls_back_instead_of_raising(mini_split, tmp_path):
     # No cache built. A missing cache is a speed problem, not a correctness
     # one, so it must degrade to decoding rather than fail. This is what

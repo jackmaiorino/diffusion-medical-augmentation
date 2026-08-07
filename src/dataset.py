@@ -52,7 +52,7 @@ def geometry_transform(image_size):
 
 
 def build_transform(image_size=256, normalize='diffusion', augment=False):
-    """Resize to a square and normalize."""
+    """Crop to a square, resize, optionally augment, then normalize."""
     # Crop to square before resizing. HAM10000 is 600x450, so a direct resize
     # would squash every lesion horizontally by 1.33x.
     steps = [geometry_transform(image_size)]
@@ -135,6 +135,10 @@ class HAM10000(Dataset):
             meta = json.load(handle)
         # A missing cache is a speed problem, but a stale one silently pairs
         # images with the wrong labels, so that has to be fatal.
+        if meta['image_size'] != image_size:
+            raise RuntimeError(
+                f"cache is {meta['image_size']}px, requested {image_size}px. "
+                "Rebuild with preprocessing/make_cache.py.")
         if meta['rows'] != total_rows:
             raise RuntimeError(
                 f"cache has {meta['rows']} rows, splits.csv has {total_rows}. "

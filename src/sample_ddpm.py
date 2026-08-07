@@ -8,7 +8,7 @@ from diffusers import DDIMScheduler
 from PIL import Image
 
 from dataset import CLASSES
-from ddpm_model import NULL_CLASS, build_unet
+from ddpm_model import NULL_CLASS, SCHEDULER_KWARGS, build_unet
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -16,6 +16,18 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def apply_guidance(conditional, unconditional, weight):
     """Classifier-free guidance: weight 1.0 leaves the prediction unchanged."""
     return unconditional + weight * (conditional - unconditional)
+
+
+def resolve_image_size(cli_value, checkpoint_value):
+    """Use the checkpoint's image size unless the CLI gives a conflicting one."""
+    if cli_value is None:
+        return checkpoint_value
+    if cli_value != checkpoint_value:
+        raise ValueError(
+            f"--image-size {cli_value} does not match the checkpoint, "
+            f"which was trained at {checkpoint_value}. Omit --image-size "
+            "to use the checkpoint's value.")
+    return cli_value
 
 
 @torch.no_grad()
@@ -73,18 +85,19 @@ def main():
     parser.add_argument('--steps', type=int, default=50)
     parser.add_argument('--batch-size', type=int, default=64)
     parser.add_argument('--seed', type=int, default=612)
-    parser.add_argument('--image-size', type=int, default=64)
+    parser.add_argument('--image-size', type=int, default=None)
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available()
                         else 'cpu')
     args = parser.parse_args()
 
     state = torch.load(args.ckpt, map_location=args.device)
+    args.image_size = resolve_image_size(args.image_size,
+                                         state['args']['image_size'])
     model = build_unet(args.image_size).to(args.device).eval()
     # Sample from the EMA weights: they are smoother than the live weights.
     model.load_state_dict(state['ema'])
 
-    scheduler = DDIMScheduler(num_train_timesteps=1000,
-                              beta_schedule='squaredcos_cap_v2')
+    scheduler = DDIMScheduler(**SCHEDULER_KWARGS)
     scheduler.set_timesteps(args.steps)
     generator = torch.Generator(device=args.device).manual_seed(args.seed)
 
