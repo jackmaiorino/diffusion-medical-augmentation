@@ -67,6 +67,40 @@ def balanced_sampler(labels, num_samples, seed):
                                  replacement=True, generator=generator)
 
 
+def diffusion_loss(model, scheduler, images, targets, noise, timesteps):
+    """MSE between the model's predicted noise and the noise actually added."""
+    noisy = scheduler.add_noise(images, noise, timesteps)
+    predicted = model(noisy, timesteps, class_labels=targets).sample
+    return torch.nn.functional.mse_loss(predicted.float(), noise)
+
+
+def prepare_micro_batches(batches, count, scheduler, cfg_dropout, device):
+    """Yield count device-ready batches with dropout, noise and timesteps."""
+    for _ in range(count):
+        images, targets = next(batches)
+        images = images.to(device, non_blocking=True)
+        targets = drop_labels(targets.to(device), cfg_dropout, NULL_CLASS)
+        noise = torch.randn_like(images)
+        timesteps = torch.randint(0, scheduler.config.num_train_timesteps,
+                                  (images.shape[0],), device=device)
+        yield images, targets, noise, timesteps
+
+
+def accumulate_gradients(model, scheduler, micro_batches, grad_accum, amp):
+    """Back-propagate prepared micro-batches, returning their mean loss."""
+    effective_loss = 0.0
+    for images, targets, noise, timesteps in micro_batches:
+        with torch.autocast('cuda', dtype=torch.bfloat16, enabled=amp):
+            loss = diffusion_loss(model, scheduler, images, targets, noise,
+                                  timesteps)
+        # Dividing by grad_accum makes the accumulated gradient the mean over
+        # the effective batch rather than its sum, so the learning rate keeps
+        # the meaning it had before accumulation existed.
+        (loss / grad_accum).backward()
+        effective_loss += loss.item() / grad_accum
+    return effective_loss
+
+
 def set_seed(seed):
     """Seed torch, numpy and random so init and data order are reproducible."""
     torch.manual_seed(seed)
@@ -121,7 +155,12 @@ def main():
     parser.add_argument('--name', default='ddpm64')
     parser.add_argument('--out', default=os.path.join(REPO_ROOT, 'runs'))
     parser.add_argument('--steps', type=int, default=100_000)
-    parser.add_argument('--batch-size', type=int, default=64)
+    # Batch 64 in one pass peaks at 10.4 GB of 11.6 GB free, where the Windows
+    # driver spills to system RAM instead of raising OOM and the step time
+    # quadruples. Two accumulated passes of 32 hold the same effective batch
+    # at 5.5 GB. See the Task 6 brief for the profiling table.
+    parser.add_argument('--batch-size', type=int, default=32)
+    parser.add_argument('--grad-accum', type=int, default=2)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--image-size', type=int, default=64)
     parser.add_argument('--cfg-dropout', type=float, default=0.1)
@@ -186,15 +225,20 @@ def main():
         labels = labels[:200]
         data = torch.utils.data.Subset(data, range(200))
 
+    # The loader yields micro-batches, so it must supply grad_accum of them
+    # for every optimizer step that remains.
+    micro_batches_needed = remaining_steps * args.grad_accum
     loader = DataLoader(
         data, batch_size=args.batch_size,
-        sampler=balanced_sampler(labels, remaining_steps * args.batch_size,
+        sampler=balanced_sampler(labels, micro_batches_needed * args.batch_size,
                                  args.seed + start_step),
         num_workers=args.workers, pin_memory=True, drop_last=True)
 
     model = build_unet(args.image_size).to(args.device)
     parameters = sum(p.numel() for p in model.parameters())
     print(f"{parameters:,} parameters on {args.device}")
+    print(f"batch {args.batch_size} x {args.grad_accum} accumulation = "
+          f"effective batch {args.batch_size * args.grad_accum}")
 
     scheduler = build_train_scheduler()
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
@@ -212,30 +256,27 @@ def main():
 
     started = time.time()
     running, counted = 0.0, 0
-    for step, (images, targets) in enumerate(loader, start=start_step):
-        if step >= args.steps:
-            break
+    # Sized above to hold exactly micro_batches_needed batches, so this is
+    # never exhausted before the step loop ends.
+    micro_batches = iter(loader)
 
-        images = images.to(args.device, non_blocking=True)
-        targets = drop_labels(targets.to(args.device), args.cfg_dropout,
-                              NULL_CLASS)
-        noise = torch.randn_like(images)
-        timesteps = torch.randint(0, scheduler.config.num_train_timesteps,
-                                  (images.shape[0],), device=args.device)
-        noisy = scheduler.add_noise(images, noise, timesteps)
-
-        with torch.autocast('cuda', dtype=torch.bfloat16,
-                            enabled=args.device.startswith('cuda')):
-            predicted = model(noisy, timesteps, class_labels=targets).sample
-            loss = torch.nn.functional.mse_loss(predicted.float(), noise)
-
+    for step in range(start_step, args.steps):
         optimizer.zero_grad(set_to_none=True)
-        loss.backward()
+        prepared = prepare_micro_batches(micro_batches, args.grad_accum,
+                                         scheduler, args.cfg_dropout,
+                                         args.device)
+        effective_loss = accumulate_gradients(
+            model, scheduler, prepared, args.grad_accum,
+            amp=args.device.startswith('cuda'))
+
+        # One clip, one update, one EMA step per effective batch, not per
+        # micro-batch: an EMA stepped per micro-batch would silently apply a
+        # different decay than --ema-decay states.
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
         ema.update(model, step)
 
-        running += loss.item()
+        running += effective_loss
         counted += 1
 
         if (step + 1) % args.log_every == 0:

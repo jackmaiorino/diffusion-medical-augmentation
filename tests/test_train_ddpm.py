@@ -1,10 +1,24 @@
 """Tests for the hand-rolled pieces of the DDPM training loop."""
 import torch
+from diffusers import UNet2DModel
 
 import train_ddpm
-from ddpm_model import NULL_CLASS
-from train_ddpm import (EMA, balanced_sampler, drop_labels, ema_decay,
-                        resume_mismatches)
+from ddpm_model import NULL_CLASS, NUM_CLASSES, build_train_scheduler, build_unet
+from train_ddpm import (EMA, accumulate_gradients, balanced_sampler,
+                        drop_labels, ema_decay, resume_mismatches)
+
+
+def tiny_unet(seed):
+    """A small UNet2DModel shaped like the real one, for fast gradient tests."""
+    torch.manual_seed(seed)
+    return UNet2DModel(
+        sample_size=16, in_channels=3, out_channels=3, layers_per_block=1,
+        # 32 and up so the default 32 GroupNorm groups still divide evenly,
+        # keeping the normalization identical to the real model's.
+        block_out_channels=(32, 64),
+        down_block_types=('DownBlock2D', 'AttnDownBlock2D'),
+        up_block_types=('AttnUpBlock2D', 'UpBlock2D'),
+        num_class_embeds=NUM_CLASSES + 1)
 
 
 def test_ema_ramps_from_fast_to_the_cap():
@@ -84,6 +98,71 @@ def test_resume_mismatches_is_empty_when_current_values_match():
     current = {'lr': 1e-4, 'batch_size': 64, 'seed': 612}
 
     assert resume_mismatches(saved, current) == []
+
+
+def test_accumulated_gradients_equal_one_undivided_batch():
+    # The whole justification for --grad-accum: two passes of 4 with the loss
+    # halved must produce the same gradients as one pass of 8. If this drifts,
+    # the run is no longer the batch-64 run the report describes.
+    scheduler = build_train_scheduler()
+    torch.manual_seed(612)
+    images = torch.randn(8, 3, 16, 16)
+    targets = torch.randint(0, NUM_CLASSES, (8,))
+    noise = torch.randn(8, 3, 16, 16)
+    timesteps = torch.randint(0, 1000, (8,))
+
+    whole = tiny_unet(0)
+    split = tiny_unet(0)
+    for one, other in zip(whole.parameters(), split.parameters()):
+        assert torch.equal(one, other), 'the two models must start identical'
+
+    # Both paths run the production function, so grad_accum is the only
+    # difference. Reproducing its division inside the test instead would let
+    # the division be deleted from the training loop with this still passing.
+    undivided = accumulate_gradients(
+        whole, scheduler, [(images, targets, noise, timesteps)],
+        grad_accum=1, amp=False)
+    halves = [(images[half], targets[half], noise[half], timesteps[half])
+              for half in (slice(0, 4), slice(4, 8))]
+    accumulated = accumulate_gradients(split, scheduler, halves,
+                                       grad_accum=2, amp=False)
+
+    for (name, one), (_, other) in zip(whole.named_parameters(),
+                                       split.named_parameters()):
+        assert torch.allclose(one.grad, other.grad, atol=1e-6), name
+    # The reported loss must also match, so log.csv stays on the same axes
+    # as runs made before accumulation existed.
+    assert abs(undivided - accumulated) < 1e-6
+
+
+def test_the_real_unet_has_no_batch_coupled_normalization():
+    # The equivalence above holds because GroupNorm normalizes each sample
+    # independently. A BatchNorm anywhere would couple samples within a
+    # micro-batch and make accumulation an approximation instead of an
+    # identity, so guard the real architecture rather than only the tiny one.
+    for module in build_unet().modules():
+        assert not isinstance(module, torch.nn.modules.batchnorm._BatchNorm)
+
+
+def test_the_loader_supplies_a_micro_batch_for_every_accumulation_pass():
+    # Sizing the sampler in optimizer steps rather than micro-batches would
+    # starve the loop after steps/grad_accum steps.
+    steps, grad_accum, batch_size = 7, 3, 4
+    labels = torch.tensor([0] * 20 + [1] * 20)
+    data = torch.utils.data.TensorDataset(torch.randn(40, 3, 8, 8), labels)
+    sampler = balanced_sampler(labels, steps * grad_accum * batch_size, 612)
+
+    loader = torch.utils.data.DataLoader(data, batch_size=batch_size,
+                                         sampler=sampler, drop_last=True)
+
+    assert len(list(loader)) == steps * grad_accum
+
+
+def test_resume_flags_a_changed_accumulation():
+    # grad_accum changes the effective batch, so it is not administrative.
+    assert 'grad_accum' not in train_ddpm.IGNORED_ON_RESUME
+    assert resume_mismatches({'grad_accum': 2},
+                             {'grad_accum': 4}) == [('grad_accum', 2, 4)]
 
 
 def test_resume_mismatches_ignores_administrative_fields():
