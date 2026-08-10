@@ -82,7 +82,8 @@ def main():
     parser.add_argument('--per-class', type=int, default=1000)
     parser.add_argument('--guidance', type=float, default=2.0)
     parser.add_argument('--steps', type=int, default=50)
-    parser.add_argument('--batch-size', type=int, default=64)
+    # guidance doubles the batch through the model, 64 spills VRAM
+    parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument('--seed', type=int, default=612)
     parser.add_argument('--image-size', type=int, default=None)
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available()
