@@ -9,8 +9,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
 
-# Fixed alphabetical order so class indices are identical for every run and
-# for both team members. Do not reorder: checkpoints encode these indices.
+# do not reorder, checkpoints encode these indices
 CLASSES = ['akiec', 'bcc', 'bkl', 'df', 'mel', 'nv', 'vasc']
 CLASS_TO_INDEX = {name: i for i, name in enumerate(CLASSES)}
 
@@ -53,8 +52,7 @@ def geometry_transform(image_size):
 
 def build_transform(image_size=256, normalize='diffusion', augment=False):
     """Crop to a square, resize, optionally augment, then normalize."""
-    # Crop to square before resizing. HAM10000 is 600x450, so a direct resize
-    # would squash every lesion horizontally by 1.33x.
+    # crop first, resizing 600x450 directly squashes lesions 1.33x
     steps = [geometry_transform(image_size)]
 
     if augment:
@@ -92,7 +90,7 @@ class HAM10000(Dataset):
 
         rows = pandas.read_csv(splits_csv)
         total_rows = len(rows)
-        # Keep each row's position in the full file: it indexes the cache.
+        # the position in the full file indexes the cache
         rows = rows.assign(row=range(total_rows))
         rows = rows[rows['split'] == split]
         if classes is not None:
@@ -133,8 +131,7 @@ class HAM10000(Dataset):
 
         with open(json_path) as handle:
             meta = json.load(handle)
-        # A missing cache is a speed problem, but a stale one silently pairs
-        # images with the wrong labels, so that has to be fatal.
+        # a stale cache silently mislabels every image, so fail hard
         if meta['image_size'] != image_size:
             raise RuntimeError(
                 f"cache is {meta['image_size']}px, requested {image_size}px. "

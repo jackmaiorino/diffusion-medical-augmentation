@@ -4,13 +4,10 @@ from diffusers import DDIMScheduler, DDPMScheduler, UNet2DModel
 from dataset import CLASSES
 
 NUM_CLASSES = len(CLASSES)
-# One extra embedding past the real classes, used as the unconditional token
-# for classifier-free guidance.
+# extra embedding used as the unconditional token for guidance
 NULL_CLASS = NUM_CLASSES
 
-# Shared by the DDPMScheduler in train_ddpm.py and the DDIMScheduler in
-# sample_ddpm.py, so the two can never silently disagree on the noise
-# schedule the checkpoint was trained under.
+# one noise schedule shared by training and sampling
 SCHEDULER_KWARGS = dict(num_train_timesteps=1000,
                         beta_schedule='squaredcos_cap_v2')
 

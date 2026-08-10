@@ -10,7 +10,7 @@ from ddpm_model import (NULL_CLASS, NUM_CLASSES, SCHEDULER_KWARGS,
 
 
 def test_parameter_count_matches_the_reported_architecture():
-    # The interim report states 37.1M. If this changes, the report is wrong.
+    # the interim report says 37.1M, if this changes the report is wrong
     assert sum(p.numel() for p in build_unet().parameters()) == 37_068_803
 
 
@@ -33,22 +33,19 @@ def test_null_class_sits_past_the_real_classes():
 
 
 def test_no_pretrained_weights_are_loaded():
-    # The project requires training from scratch, not fine-tuning.
+    # the project requires training from scratch, not fine-tuning
     with open(ddpm_model.__file__) as handle:
         assert 'from_pretrained' not in handle.read()
 
 
 def test_scheduler_kwargs_are_unchanged():
-    # Values must stay exactly as they were before the refactor that moved
-    # them here from train_ddpm.py and sample_ddpm.py.
+    # existing checkpoints were trained under exactly these values
     assert SCHEDULER_KWARGS == {'num_train_timesteps': 1000,
                                 'beta_schedule': 'squaredcos_cap_v2'}
 
 
 def test_train_and_sample_schedulers_agree_on_the_noise_schedule():
-    # Compares the schedulers the two scripts actually construct, not the
-    # source text. A sampler running a different noise schedule than the
-    # checkpoint was trained under degrades samples without raising.
+    # a mismatched noise schedule degrades samples without ever raising
     train = build_train_scheduler()
     sample = build_sample_scheduler()
 
@@ -59,13 +56,11 @@ def test_train_and_sample_schedulers_agree_on_the_noise_schedule():
 
 
 def test_neither_script_builds_its_own_scheduler():
-    # The agreement test above is only meaningful while both scripts go
-    # through the shared builders, so guard the single call site too.
+    # the agreement above only holds while both scripts use the builders
     for module in (train_ddpm, sample_ddpm):
         with open(module.__file__) as handle:
             source = handle.read()
         assert 'squaredcos_cap_v2' not in source
         assert 'DDPMScheduler(' not in source
-        # train_ddpm's preview sampler legitimately derives a DDIMScheduler
-        # from the training scheduler's own config, so allow from_config.
+        # from_config on the training scheduler's config is still allowed
         assert 'DDIMScheduler(' not in source

@@ -19,7 +19,7 @@ def to_display(tensor):
 
 
 def psnr(a, b):
-    """PSNR in dB between two [-1, 1] tensors, over a 2.0-wide value range."""
+    """PSNR in dB between two [-1, 1] tensors."""
     mse = torch.mean((a.float() - b.float()) ** 2)
     return float(20 * torch.log10(torch.tensor(2.0)) - 10 * torch.log10(mse))
 
@@ -47,8 +47,7 @@ def main():
         batch = torch.stack([ds[i][0] for i in range(n)]).to(args.device, dtype)
 
         with torch.no_grad():
-            # Sample the posterior rather than taking its mean, matching how
-            # latents are drawn during diffusion training.
+            # sample the posterior, matching how diffusion training draws latents
             latents = vae.encode(batch).latent_dist.sample()
             recon = vae.decode(latents).sample
 

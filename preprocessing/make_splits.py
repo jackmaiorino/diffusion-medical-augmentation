@@ -11,10 +11,8 @@ base = os.path.dirname(os.path.abspath(__file__))
 raw = pandas.read_csv(os.path.join(base, '..', 'data',
                       'raw', 'HAM10000_metadata.csv'))
 
-# Split on lesions rather than images. HAM10000 has 1-2 images per lesion, so
-# assigning images independently would put the same lesion in both train and
-# test. Every image of a lesion inherits that lesion's split, which prevents
-# the leakage while keeping all 10,015 images.
+# split on lesions, not images: 1-2 images per lesion, so an image-level
+# split would leak the same lesion into both train and test
 lesions = raw[['lesion_id', 'dx']].drop_duplicates(ignore_index=True)
 
 train, holdout = train_test_split(

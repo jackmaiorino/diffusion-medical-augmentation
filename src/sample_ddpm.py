@@ -75,7 +75,7 @@ def save_grid(model, scheduler, args, generator, per_class=6):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--ckpt', required=True)
-    # In --grid mode this is a .png path rather than a directory.
+    # a .png path in --grid mode, a directory otherwise
     parser.add_argument('--out', required=True)
     parser.add_argument('--grid', action='store_true')
     parser.add_argument('--classes', default='df,vasc,akiec')
@@ -93,7 +93,7 @@ def main():
     args.image_size = resolve_image_size(args.image_size,
                                          state['args']['image_size'])
     model = build_unet(args.image_size).to(args.device).eval()
-    # Sample from the EMA weights: they are smoother than the live weights.
+    # the EMA weights sample cleaner than the live ones
     model.load_state_dict(state['ema'])
 
     scheduler = build_sample_scheduler()

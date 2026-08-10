@@ -93,9 +93,7 @@ def accumulate_gradients(model, scheduler, micro_batches, grad_accum, amp):
         with torch.autocast('cuda', dtype=torch.bfloat16, enabled=amp):
             loss = diffusion_loss(model, scheduler, images, targets, noise,
                                   timesteps)
-        # Dividing by grad_accum makes the accumulated gradient the mean over
-        # the effective batch rather than its sum, so the learning rate keeps
-        # the meaning it had before accumulation existed.
+        # divide so the accumulated gradient is a mean, not a sum
         (loss / grad_accum).backward()
         effective_loss += loss.item() / grad_accum
     return effective_loss
@@ -111,7 +109,7 @@ def set_seed(seed):
 @torch.no_grad()
 def sample_grid(model, scheduler, device, guidance, per_class=4, steps=50,
                 seed=612):
-    """Draw per_class images for every class and tile them into one figure."""
+    """Sample per_class images of every class as one [0, 1] tensor."""
     sampler = DDIMScheduler.from_config(scheduler.config)
     sampler.set_timesteps(steps)
 
@@ -136,9 +134,7 @@ def sample_grid(model, scheduler, device, guidance, per_class=4, steps=50,
     return (latents.clamp(-1, 1) + 1) / 2
 
 
-# Fields where a difference from the checkpoint is expected and meaningless:
-# output paths, dataloader workers, logging/sampling/checkpoint cadence, and
-# cache mode never change what gets learned.
+# args that may differ from the checkpoint without changing what is learned
 IGNORED_ON_RESUME = {'resume', 'name', 'out', 'workers', 'log_every',
                      'sample_every', 'ckpt_every', 'no_cache', 'smoke'}
 
@@ -155,10 +151,7 @@ def main():
     parser.add_argument('--name', default='ddpm64')
     parser.add_argument('--out', default=os.path.join(REPO_ROOT, 'runs'))
     parser.add_argument('--steps', type=int, default=100_000)
-    # Batch 64 in one pass peaks at 10.4 GB of 11.6 GB free, where the Windows
-    # driver spills to system RAM instead of raising OOM and the step time
-    # quadruples. Two accumulated passes of 32 hold the same effective batch
-    # at 5.5 GB. See the Task 6 brief for the profiling table.
+    # 32x2 accumulation, a single batch of 64 spills VRAM and crawls
     parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument('--grad-accum', type=int, default=2)
     parser.add_argument('--lr', type=float, default=1e-4)
@@ -179,8 +172,7 @@ def main():
     args = parser.parse_args()
 
     if args.smoke:
-        # Short overfit on a few images. If the grid shows lesion-shaped
-        # structure, conditioning and normalization are wired correctly.
+        # quick overfit on a few images to check the conditioning is wired up
         args.steps, args.log_every = 500, 50
         args.sample_every, args.ckpt_every = 100, 500
         args.name = args.name + '_smoke'
@@ -189,9 +181,7 @@ def main():
         raise RuntimeError('CUDA requested but not available. '
                            'Pass --device cpu to run without a GPU.')
 
-    # Determined before the sampler and loader exist, so a resumed run can
-    # be seeded and sized off of it rather than replaying the original
-    # stream from the start.
+    # load first so the sampler below can be sized to the steps that remain
     resume_state = None
     start_step = 0
     if args.resume:
@@ -211,9 +201,7 @@ def main():
               f"to do for --steps {args.steps}")
         return
 
-    # Offsetting by start_step means a fresh run (start_step 0) seeds and
-    # samples exactly as before, while a resumed run draws a fresh slice of
-    # the data/noise/dropout stream instead of repeating what already ran.
+    # offset the seed so a resumed run does not replay batches it already saw
     set_seed(args.seed + start_step)
     run_dir = os.path.join(args.out, args.name)
     os.makedirs(run_dir, exist_ok=True)
@@ -225,8 +213,6 @@ def main():
         labels = labels[:200]
         data = torch.utils.data.Subset(data, range(200))
 
-    # The loader yields micro-batches, so it must supply grad_accum of them
-    # for every optimizer step that remains.
     micro_batches_needed = remaining_steps * args.grad_accum
     loader = DataLoader(
         data, batch_size=args.batch_size,
@@ -256,8 +242,6 @@ def main():
 
     started = time.time()
     running, counted = 0.0, 0
-    # Sized above to hold exactly micro_batches_needed batches, so this is
-    # never exhausted before the step loop ends.
     micro_batches = iter(loader)
 
     for step in range(start_step, args.steps):
@@ -269,9 +253,8 @@ def main():
             model, scheduler, prepared, args.grad_accum,
             amp=args.device.startswith('cuda'))
 
-        # One clip, one update, one EMA step per effective batch, not per
-        # micro-batch: an EMA stepped per micro-batch would silently apply a
-        # different decay than --ema-decay states.
+        # clip, step and EMA once per optimizer step, an EMA updated per
+        # micro-batch would silently apply the wrong decay
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
         ema.update(model, step)
@@ -280,8 +263,7 @@ def main():
         counted += 1
 
         if (step + 1) % args.log_every == 0:
-            # Log a running mean: single-step diffusion loss mostly reflects
-            # which timesteps were drawn, not progress.
+            # a single step's loss mostly reflects which timesteps were drawn
             mean = running / counted
             running, counted = 0.0, 0
             elapsed = time.time() - started
