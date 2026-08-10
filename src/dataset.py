@@ -42,6 +42,23 @@ def splits_sha1(splits_csv):
         return hashlib.sha1(handle.read()).hexdigest()
 
 
+def validate_cache_meta(meta, image_size, total_rows, splits_csv):
+    """Raise RuntimeError if a cache sidecar is stale or mismatched."""
+    # a stale cache silently mislabels every image, so fail hard
+    if meta['image_size'] != image_size:
+        raise RuntimeError(
+            f"cache is {meta['image_size']}px, requested {image_size}px. "
+            "Rebuild with preprocessing/make_cache.py.")
+    if meta['rows'] != total_rows:
+        raise RuntimeError(
+            f"cache has {meta['rows']} rows, splits.csv has {total_rows}. "
+            "Rebuild with preprocessing/make_cache.py.")
+    if meta['splits_sha1'] != splits_sha1(splits_csv):
+        raise RuntimeError(
+            "cache was built from a different splits.csv. "
+            "Rebuild with preprocessing/make_cache.py.")
+
+
 def geometry_transform(image_size):
     """Crop to square and resize. Shared with the cache builder."""
     return transforms.Compose([
@@ -131,19 +148,7 @@ class HAM10000(Dataset):
 
         with open(json_path) as handle:
             meta = json.load(handle)
-        # a stale cache silently mislabels every image, so fail hard
-        if meta['image_size'] != image_size:
-            raise RuntimeError(
-                f"cache is {meta['image_size']}px, requested {image_size}px. "
-                "Rebuild with preprocessing/make_cache.py.")
-        if meta['rows'] != total_rows:
-            raise RuntimeError(
-                f"cache has {meta['rows']} rows, splits.csv has {total_rows}. "
-                "Rebuild with preprocessing/make_cache.py.")
-        if meta['splits_sha1'] != splits_sha1(splits_csv):
-            raise RuntimeError(
-                "cache was built from a different splits.csv. "
-                "Rebuild with preprocessing/make_cache.py.")
+        validate_cache_meta(meta, image_size, total_rows, splits_csv)
 
         return numpy.load(npy_path, mmap_mode='r')
 
