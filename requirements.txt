@@ -26,3 +26,6 @@ matplotlib==3.11.1
 
 # tests
 pytest==9.1.0
+
+# evaluation
+torch-fidelity==0.4.0
