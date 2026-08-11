@@ -1,0 +1,4 @@
+class,n_real,n_synth,fid,kid_mean,kid_std,fid_floor,kid_floor_mean,kid_floor_std
+akiec,227,1000,54.85,24.121,4.819,70.96,-0.35,0.533
+df,84,1000,44.37,4.445,3.562,107.42,3.754,0.0
+vasc,96,1000,51.94,7.346,2.524,105.67,-5.267,0.0

@@ -1,0 +1,4 @@
+class,n_synth,n_flagged,flagged_fraction,lpips_threshold,inception_threshold
+akiec,1000,215,0.215,0.033413,0.049039
+df,1000,740,0.74,0.04175,0.073973
+vasc,1000,743,0.743,0.053702,0.077612
