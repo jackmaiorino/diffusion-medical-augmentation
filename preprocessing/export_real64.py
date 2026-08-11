@@ -19,8 +19,9 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EVAL_DIR = os.path.join(REPO_ROOT, 'data', 'eval', 'real64')
 
 
-def export_real64(splits_csv, cache_dir, out_dir, image_size=64):
-    """Write train rows as out_dir/<dx>/<image_id>.png, returning the count."""
+def export_real64(splits_csv, cache_dir, out_dir, image_size=64,
+                  split='train'):
+    """Write one split's rows as out_dir/<dx>/<image_id>.png, return count."""
     npy_path, json_path = cache_paths(cache_dir, image_size)
     # no JPEG fallback here, a wrong-geometry reference poisons every score
     if not (os.path.exists(npy_path) and os.path.exists(json_path)):
@@ -37,26 +38,31 @@ def export_real64(splits_csv, cache_dir, out_dir, image_size=64):
     if os.path.exists(out_dir):
         shutil.rmtree(out_dir)  # a re-split must not leave orphans
 
-    train = rows[rows['split'] == 'train']
-    for row in train.itertuples():
+    picked = rows[rows['split'] == split]
+    for row in picked.itertuples():
         folder = os.path.join(out_dir, row.dx)
         os.makedirs(folder, exist_ok=True)
         # row.Index is the position in the full csv, which indexes the cache
         Image.fromarray(numpy.asarray(array[row.Index])).save(
             os.path.join(folder, row.image_id + '.png'))
-    return len(train)
+    return len(picked)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--splits-csv', default=SPLITS_CSV)
     parser.add_argument('--cache-dir', default=CACHE_DIR)
-    parser.add_argument('--out', default=EVAL_DIR)
+    parser.add_argument('--out')
     parser.add_argument('--image-size', type=int, default=64)
+    parser.add_argument('--split', default='train',
+                        choices=['train', 'val', 'test'])
     args = parser.parse_args()
 
+    if args.out is None:
+        args.out = EVAL_DIR if args.split == 'train' \
+            else EVAL_DIR + '_' + args.split
     count = export_real64(args.splits_csv, args.cache_dir, args.out,
-                          args.image_size)
+                          args.image_size, args.split)
     print(f"wrote {count} images to {args.out}")
 
 
