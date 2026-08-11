@@ -1,0 +1,8 @@
+class,n_flagged,distinct_sources,train_images,distinct_lesions,train_lesions,top_source_share
+akiec,791,163,227,118,160,0.0657
+bcc,562,171,354,129,229,0.0463
+bkl,250,122,765,99,509,0.144
+df,970,81,84,50,51,0.0814
+mel,169,96,776,80,430,0.0414
+nv,28,28,4679,28,3782,0.0357
+vasc,923,88,96,64,68,0.0693
