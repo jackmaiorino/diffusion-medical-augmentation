@@ -1,6 +1,9 @@
 """Generate class-conditional samples from a trained DDPM checkpoint."""
 import argparse
+from contextlib import contextmanager
 import os
+import shutil
+import tempfile
 
 import matplotlib.pyplot as plt
 import torch
@@ -27,6 +30,41 @@ def resolve_image_size(cli_value, checkpoint_value):
             f"which was trained at {checkpoint_value}. Omit --image-size "
             "to use the checkpoint's value.")
     return cli_value
+
+
+def prepare_output_root(path):
+    """Validate a vacant final sample root without writing into it."""
+    path = os.path.abspath(path)
+    if os.path.lexists(path):
+        if os.path.islink(path) or not os.path.isdir(path):
+            raise RuntimeError(f'--out exists and is not a directory: {path}')
+        entries = sorted(os.listdir(path))
+        if entries:
+            raise RuntimeError(
+                f'--out must be empty to prevent stale samples: {path}. '
+                'Choose a new directory or remove the old pool explicitly.')
+    return path
+
+
+@contextmanager
+def staged_output_root(path):
+    """Yield a sibling staging tree and install it only after success."""
+    destination = prepare_output_root(path)
+    parent = os.path.dirname(destination)
+    os.makedirs(parent, exist_ok=True)
+    staged = tempfile.mkdtemp(
+        prefix=f'.{os.path.basename(destination)}.tmp-', dir=parent)
+    installed = False
+    try:
+        yield staged
+        if os.path.exists(destination):
+            # prepare_output_root proved it empty; fail if another writer raced.
+            os.rmdir(destination)
+        os.replace(staged, destination)
+        installed = True
+    finally:
+        if not installed and os.path.exists(staged):
+            shutil.rmtree(staged)
 
 
 @torch.no_grad()
@@ -105,20 +143,21 @@ def main():
         save_grid(model, scheduler, args, generator)
         return
 
-    for name in args.classes.split(','):
-        label = CLASSES.index(name)
-        folder = os.path.join(args.out, name)
-        os.makedirs(folder, exist_ok=True)
+    with staged_output_root(args.out) as staged:
+        for name in args.classes.split(','):
+            label = CLASSES.index(name)
+            folder = os.path.join(staged, name)
+            os.makedirs(folder)
 
-        written = 0
-        while written < args.per_class:
-            count = min(args.batch_size, args.per_class - written)
-            for image in generate(model, scheduler, label, count,
-                                  args.guidance, args.device, generator):
-                Image.fromarray(image).save(
-                    os.path.join(folder, f'{name}_{written:05d}.png'))
-                written += 1
-            print(f"{name}: {written}/{args.per_class}")
+            written = 0
+            while written < args.per_class:
+                count = min(args.batch_size, args.per_class - written)
+                for image in generate(model, scheduler, label, count,
+                                      args.guidance, args.device, generator):
+                    Image.fromarray(image).save(
+                        os.path.join(folder, f'{name}_{written:05d}.png'))
+                    written += 1
+                print(f"{name}: {written}/{args.per_class}")
 
     print(f"wrote samples to {args.out}")
 
