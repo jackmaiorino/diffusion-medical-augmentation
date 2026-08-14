@@ -45,6 +45,9 @@ em { color: #444; }
 ul { list-style: none; margin: 0.5em 0; padding-left: 1.4em; }
 ol { list-style-type: decimal; margin: 0.5em 0; padding-left: 1.4em; }
 li { margin: 0.25em 0; }
+/* keep the bibliography compact enough to avoid a nearly empty trailing page */
+h2:last-of-type + ol { font-size: 9.25pt; line-height: 1.28; }
+h2:last-of-type + ol > li { margin: 0.12em 0; }
 /* the serif stack renders a broken disc glyph, so draw the bullet ourselves */
 ul > li { position: relative; }
 ul > li::before { content: "\\2022"; font-family: Arial, sans-serif; position: absolute;
