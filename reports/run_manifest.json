@@ -1,0 +1,51 @@
+{
+  "captured_at": "2026-08-13T23:50:27-04:00",
+  "note": "post-hoc hashes binding the gitignored artifacts behind the reported numbers; tracked files are pinned by git history",
+  "git_head_at_capture": "5a560ad81a71b3190b6cd67f6606b030815bcd50",
+  "toolchain": {
+    "python": "3.12.10",
+    "torch": "2.13.0+cu126",
+    "torchvision": "0.28.0+cu126",
+    "cuda_runtime": "12.6"
+  },
+  "gpus": {
+    "cuda:0": "NVIDIA GeForce RTX 4070 SUPER (classifier seeds 612, 613; DDPM)",
+    "cuda:1": "NVIDIA GeForce RTX 3050 (classifier seed 614)"
+  },
+  "ignored_inputs": {
+    "data/cache/ham64.npy": "7b6d981af6908076c57e54946bbb07a7dcdd1faae8a647ff923d6fea10023df8",
+    "data/cache/ham64.json": "21139a8216e769f4a662299b597048b71960843bec76ccacfb2f31569e9db464",
+    "runs/ddpm64/ckpt_100000.pt": "986363f5072f645f8aab26a320ffc1e70fdb83533bfa57370d18b4ed1c188bec",
+    "data/eval/memorization_thresholds_lesion.json": "0ffaffef64840bfc9c36780f29767119a1aed1dda97f5f6f6dc29b59701373d4",
+    "data/eval/memorization_ddpm64_detail.csv": "846fe8ba26693d1e6610670a160c6d12c92f7b8c245bf1d07819362e91e6fda5"
+  },
+  "synthetic_pools": {
+    "data/synthetic/ddpm64_all": {
+      "sha256": "1d9f6e584e7f5caa8913ccdc16cf3838593fb4b3bdb9da5c13e538ff0920c8bb",
+      "files": 7000,
+      "per_class": {"akiec": 1000, "bcc": 1000, "bkl": 1000, "df": 1000, "mel": 1000, "nv": 1000, "vasc": 1000}
+    },
+    "data/synthetic/ddpm64_accepted": {
+      "sha256": "cda3946f44a0a3409ca0bb55b17cd4f9ab43ce3a16dd30c195a803bd49fda919",
+      "files": 3307,
+      "per_class": {"akiec": 209, "bcc": 438, "bkl": 750, "df": 30, "mel": 831, "nv": 972, "vasc": 77}
+    }
+  },
+  "classifier_result_files": {
+    "runs/classifier/classical_aug_s612/result.json": "732009bc7324efe6002eff4a322a5cb525efbd2426644e444ebd08d99b8d7a40",
+    "runs/classifier/classical_aug_s613/result.json": "2d2e7b05d7b953e029968b5f1d2c3ddd3feb09942209987740a073b97df5cff1",
+    "runs/classifier/classical_aug_s614/result.json": "b5bd1f9f17d60a9a02ecd5e29332c22409b4fc15f14790132202c1416f274b56",
+    "runs/classifier/dup_real_s612/result.json": "bec86b01e38770a63f561a6f42f09dd75e9531faa4931c1a9bd9ba8eec87a2a4",
+    "runs/classifier/dup_real_s613/result.json": "df52bdea25002a6a83dcb29438fbdfaa5b54962e6b00d4b3d5ca0db3c4896a33",
+    "runs/classifier/dup_real_s614/result.json": "2e6b1f1c734f371569a84580bd5c210deb3124561efbcb37867a971d8246a041",
+    "runs/classifier/real_only_s612/result.json": "cc829ee34709c37508399ce2c11ab07cb4340e7f0b0d178875deaa5fcbb3ba05",
+    "runs/classifier/real_only_s613/result.json": "6697f3e1703b8b3d1644aebe461fcc8eabb128cd573823e9e1a5d8abe8e2c1e5",
+    "runs/classifier/real_only_s614/result.json": "4e8fd4288efd8e073b2bca7ea6d4c93b6b04dc01b723196db52a42a12326adc7",
+    "runs/classifier/synth_accepted_s612/result.json": "de9e559967919dff4781c9b5a5787277b3660e9d070cc168562353a186551f06",
+    "runs/classifier/synth_accepted_s613/result.json": "658fc11ed39543d0a5c60994a6b6e182aea843714519eb35ae36041c362ef2f1",
+    "runs/classifier/synth_accepted_s614/result.json": "0949055ed34e6daa9b2911931379e85fe248e8a52e8cdda209416e27d486d765",
+    "runs/classifier/synth_all_s612/result.json": "dee472199212201d3220d6a782cc5fe85a79a702949d80d6b7a5d1f5cfbcbca5",
+    "runs/classifier/synth_all_s613/result.json": "43147bb408730273cc74e14009278bdd4c3729315432b64e5133cfbaf54cfaf3",
+    "runs/classifier/synth_all_s614/result.json": "e8cb5ac7dc7ebf2bd0942bbf600666da2b995497d5b00db88852e954a9c6654a"
+  }
+}
