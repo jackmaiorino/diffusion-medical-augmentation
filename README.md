@@ -120,6 +120,14 @@ or results whose formal hyperparameters differ from the command above. GPU
 ordinal, output path, and data-loader worker count are execution settings, not
 aggregation keys.
 
+Plot the DDPM and classifier training loss curves, and re-check any saved
+checkpoint against its recorded test metrics:
+
+```powershell
+.\.venv\Scripts\python.exe reports\loss_figure.py
+.\.venv\Scripts\python.exe src\eval_classifier.py --run runs\classifier\classical_aug_s612
+```
+
 ## Build the report
 
 The PDF builder needs Google Chrome and network access to load Mermaid when the
