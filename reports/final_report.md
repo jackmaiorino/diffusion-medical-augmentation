@@ -2,7 +2,8 @@
 
 **MSML612 Group Project, Final Report**  
 Team (2 members): Jack Maiorino, Rithvik Kommareddy  
-Date: August 2026
+Date: August 2026  
+Code: https://github.com/jackmaiorino/diffusion-medical-augmentation
 
 ---
 
@@ -76,6 +77,13 @@ AdamW (Loshchilov and Hutter, 2019) at 1e-4, effective batch 64 (batch 32 with 2
 gradient accumulation, which avoids VRAM spill on our 12 GB GPU), EMA decay 0.9999,
 13.0 hours on a single GPU. Sampling uses DDIM (Song et al., 2021) at 50 steps with
 guidance 2.0 and seed 612; we generated 1,000 images per class.
+
+The implementation is PyTorch 2.13 (CUDA 12.6) with diffusers 0.39, torchvision, pandas,
+and numpy, tested with pytest; no pretrained weights enter the training or sampling path,
+which a test enforces. The architectural choices are deliberately standard and cited. The
+project's novelty is in the evaluation design: a lesion-calibrated memorization detector
+(Section 5) and a duplicated-real control arm that separates generative value from
+oversampling (Section 6).
 
 Figure 1 shows the loss curves. DDPM training loss falls throughout the run, from a mean
 of 0.025 over the first 5k steps to 0.0085 near 100k. Validation loss, scored at each
@@ -318,7 +326,8 @@ however, and there is no natural-frequency control, so this study cannot identif
 as the cause. The supported scope is narrower: in this one 37M-parameter from-scratch DDPM
 run, the smallest classes have the highest calibrated detection rates.
 
-**Why we did not retrain.** The candidate mitigations, in the order we would try them, are
+**Future scope, and why we did not retrain.** The candidate mitigations, in the order we
+would try them, are
 capping the oversampling weight (e.g. 90% empirical + 10% balanced sampling, which cuts
 per-image exposure by 5 to 10x), dihedral train-time augmentation with an
 augmentation-aware detector, a smaller model, scheduled guidance, and memorization-based
@@ -344,7 +353,8 @@ inventory, not execution attestation.
 
 ## 8. Deviations from the Interim Plan
 
-- **The StyleGAN2-ADA baseline was dropped.** Once the memorization result landed, the
+- **The StyleGAN2-ADA (Karras et al., 2020) baseline was dropped.** Once the memorization
+  result landed, the
   informative comparison became synthetic-vs-duplicated-real, not diffusion-vs-GAN. A GAN
   trained on the same data would require its own memorization and downstream evaluation, and
   the available compute went to the checkpoint sweep and held-out analysis instead. No GAN
@@ -380,7 +390,14 @@ Carlini et al. (2023) extracted training images from large diffusion models; Dar
 survive augmented training, which informed our choice not to treat augmentation alone as a
 guaranteed fix.
 
-## 10. References
+## 10. Member Contributions
+
+Jack Maiorino built the preprocessing and training pipeline, trained the DDPM and the
+classifier arms, and ran the memorization and downstream evaluations. Rithvik Kommareddy
+built the presentation and live demo, reviewed the analysis, and assembled the
+related-work survey. Both members wrote the report.
+
+## 11. References
 
 1. Ho, J., Jain, A., and Abbeel, P. (2020). *Denoising Diffusion Probabilistic Models.* NeurIPS.
 2. Nichol, A., and Dhariwal, P. (2021). *Improved Denoising Diffusion Probabilistic Models.* ICML.
