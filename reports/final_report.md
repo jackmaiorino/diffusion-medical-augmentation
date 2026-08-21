@@ -14,25 +14,32 @@ classes of HAM10000, a severely imbalanced dermoscopic benchmark. We trained a
 class-conditional 37.1M-parameter pixel-space DDPM from scratch on a leak-free lesion-level
 split and generated 1,000 images per class. In this class-balanced run, a nearest-neighbor
 check in two perceptual spaces, calibrated on real-to-real distances with whole-lesion
-exclusion, flags 97% of generated dermatofibroma (df) images as near-copies of specific
-training images; the flags trace to 81 of the 84 df training images. Flag rates generally
+exclusion, flags 97% of generated dermatofibroma (df, the rarest class) images as
+near-copies of specific training images; the flags trace to 81 of the 84 df training
+images, indicating that the generator draws on nearly all of its training data rather than
+overemphasizing a select few images. Flag rates generally
 rise across training checkpoints as train-referenced KID falls. A size-matched held-out
 analysis is less dramatic than the unmatched comparison: for df, median LPIPS is 0.134 to
 an equal-sized training reference and 0.155 to validation, and 66.0% of synthetic images are
-closer to train versus 63.7% for the real-data baseline. Filtering does not improve any of
-the seven held-out KID point estimates, although subset variability is too wide to establish
-each change inferentially. Across three classifier seeds, classical augmentation raises mean
-rare-class F1 from 0.343 to 0.573; duplicated real, unfiltered synthetic, and filtered
-synthetic data score 0.289, 0.299, and 0.290. These descriptive results provide no evidence
-of a downstream gain from either synthetic arm and do not establish equivalence between
+closer to train versus 63.7% for the real-data baseline. Filtering out the near-copies does
+not improve any of the seven held-out KID point estimates, although subset variability is
+too wide to establish each change inferentially. Across three classifier seeds, classical
+augmentation raises mean rare-class F1 from 0.343 to 0.573; unfiltered synthetic, filtered
+synthetic, and duplicated real (a dataset created by duplicating real images to match the
+length of the filtered synthetic dataset) score 0.299, 0.290, and 0.289. Overall, these
+descriptive results provide no evidence that diffusion-based augmentation or our filtering
+method improves rare-class classification, and they do not establish equivalence between
 filtered synthetic and duplicated real data.
 
 ## 1. Problem Statement and Research Question
 
-Clinical image datasets are long-tailed, and classifiers underperform exactly where reliable
-detection matters most. Classical augmentation only perturbs existing pixels; generative
-augmentation promises new samples. Diffusion models are the state of the art in image
-generation and provide native class-conditional control, which motivated our original
+Clinical image datasets are strongly unbalanced, with certain conditions having thousands
+of examples while others do not even have a hundred after the train-test split. Due to rare
+conditions lacking presence in these datasets, classifiers underperform exactly where
+reliable detection matters most. This is the motivation for augmenting the data to aid in
+the detection of rare classes. Classical augmentation only perturbs existing pixels;
+generative augmentation promises new samples. Diffusion models are the state of the art in
+image generation and provide native class-conditional control, which motivates our original
 question: can diffusion-generated images meaningfully improve a rare-class classifier? The
 project's findings sharpened that question into the one this report answers:
 
@@ -51,18 +58,20 @@ is worst on the minority classes (mel 62.1%, df 51.1%). We therefore split at th
 level, stratified by class, 70/15/15, seed 612, keeping all images; an assertion verifies
 that no lesion crosses splits. Full details are in the interim report; the resulting counts:
 
-| Class | Train | Val | Test | Total |
-|-------|------:|----:|-----:|------:|
-| nv    | 4,679 | 1,015 | 1,011 | 6,705 |
-| mel   |   776 |   163 |   174 | 1,113 |
-| bkl   |   765 |   165 |   169 | 1,099 |
-| bcc   |   354 |    77 |    83 |   514 |
-| akiec |   227 |    55 |    45 |   327 |
-| vasc  |    96 |    23 |    23 |   142 |
-| df    |    84 |    15 |    16 |   115 |
-| **All** | **6,981** | **1,513** | **1,521** | **10,015** |
+| Class | Condition | Train | Val | Test | Total |
+|-------|-----------|------:|----:|-----:|------:|
+| nv    | melanocytic nevi | 4,679 | 1,015 | 1,011 | 6,705 |
+| mel   | melanoma |   776 |   163 |   174 | 1,113 |
+| bkl   | benign keratosis-like lesions |   765 |   165 |   169 | 1,099 |
+| bcc   | basal cell carcinoma |   354 |    77 |    83 |   514 |
+| akiec | actinic keratoses and intraepithelial carcinoma |   227 |    55 |    45 |   327 |
+| vasc  | vascular lesions |    96 |    23 |    23 |   142 |
+| df    | dermatofibroma |    84 |    15 |    16 |   115 |
+| **All** | | **6,981** | **1,513** | **1,521** | **10,015** |
 
-df, with 84 training images from 51 distinct lesions, is the stress test the study turns on.
+From this point on, conditions are referred to by their class name, and akiec, vasc, and df
+are considered the rare classes. df, with 84 training images from 51 distinct lesions, is
+the stress test the study turns on.
 
 ## 3. Generative Model
 
@@ -79,8 +88,11 @@ gradient accumulation, which avoids VRAM spill on our 12 GB GPU), EMA decay 0.99
 guidance 2.0 and seed 612; we generated 1,000 images per class.
 
 The implementation is PyTorch 2.13 (CUDA 12.6) with diffusers 0.39, torchvision, pandas,
-and numpy, tested with pytest; no pretrained weights enter the training or sampling path,
-which a test enforces. The architectural choices are deliberately standard and cited. The
+and numpy, tested with pytest. diffusers supplies the UNet definition and noise schedulers;
+the training loop, EMA, classifier-free guidance, gradient accumulation (verified by a
+gradient-equivalence test), and the guided DDIM sampler are our own plain-PyTorch code, and
+no pretrained weights enter the training or sampling path, which a test enforces. The
+architectural choices themselves are deliberately standard and cited. The
 project's novelty is in the evaluation design: a lesion-calibrated memorization detector
 (Section 5) and a duplicated-real control arm that separates generative value from
 oversampling (Section 6).
@@ -286,7 +298,8 @@ filtered-synthetic each add 3,307 class-matched rows, and unfiltered synthetic a
 These are fixed manifests, not validation-selected mixing ratios. Validation macro-F1
 selects the checkpoint only; its test set is then evaluated once for that seed and regime.
 The primary summary is mean F1 on akiec, df, and vasc, with macro-F1 and balanced accuracy
-secondary. Results below are mean +/- sample standard deviation across three seeds.
+secondary. The first table reports mean +/- sample standard deviation across three seeds;
+the second reports the per-class three-seed means.
 
 | Regime | Rare-class F1 (delta vs real) | Macro F1 | Balanced acc. |
 |--------|:-----------------------------:|:--------:|:-------------:|
@@ -296,13 +309,13 @@ secondary. Results below are mean +/- sample standard deviation across three see
 | 4 Unfiltered synthetic | 0.299 +/- 0.022 (-0.044) | 0.432 +/- 0.012 | 0.414 +/- 0.018 |
 | 5 Filtered synthetic | 0.290 +/- 0.048 (-0.052) | 0.416 +/- 0.029 | 0.399 +/- 0.033 |
 
-| Regime | akiec F1 | df F1 | vasc F1 |
-|--------|---------:|------:|--------:|
-| 1 Real only | 0.232 +/- 0.026 | 0.068 +/- 0.072 | 0.727 +/- 0.066 |
-| 2 Classical aug | 0.487 +/- 0.005 | 0.395 +/- 0.079 | 0.838 +/- 0.035 |
-| 3 Duplicated-real | 0.184 +/- 0.012 | 0.111 +/- 0.033 | 0.571 +/- 0.013 |
-| 4 Unfiltered synthetic | 0.181 +/- 0.034 | 0.060 +/- 0.053 | 0.656 +/- 0.073 |
-| 5 Filtered synthetic | 0.118 +/- 0.069 | 0.032 +/- 0.055 | 0.721 +/- 0.113 |
+| Regime | akiec F1 | bcc F1 | bkl F1 | df F1 | mel F1 | nv F1 | vasc F1 |
+|--------|---------:|-------:|-------:|------:|-------:|------:|--------:|
+| 1 Real only | 0.232 | 0.429 | 0.375 | 0.068 | 0.394 | 0.843 | 0.727 |
+| 2 Classical aug | 0.487 | 0.612 | 0.518 | 0.395 | 0.514 | 0.867 | 0.838 |
+| 3 Duplicated-real | 0.184 | 0.433 | 0.409 | 0.111 | 0.409 | 0.824 | 0.571 |
+| 4 Unfiltered synthetic | 0.181 | 0.496 | 0.401 | 0.060 | 0.385 | 0.846 | 0.656 |
+| 5 Filtered synthetic | 0.118 | 0.432 | 0.414 | 0.032 | 0.365 | 0.832 | 0.721 |
 
 Classical augmentation has the highest three-seed mean for every rare class and raises mean
 rare-class F1 by 0.231 over real only. Neither synthetic arm improves the corresponding mean.
@@ -316,6 +329,32 @@ synthetic and duplicated real are interchangeable in the population. Per-run
 values are in `reports/classifier_runs.csv`, with arm summaries in
 `reports/classifier_summary.csv`.
 
+The per-class table sharpens the aggregate picture. Only vasc shows a large improvement in
+F1 from duplicated-real to filtered synthetic. While vasc is a rare class, it has the
+second-highest F1 under every regime, implying the classifier did not particularly struggle
+to identify it. The highest-scoring class across all regimes, nv, does not change much
+across regimes. The two classes that score lowest in the duplicated-real regime, akiec and
+df, achieve worse results under the filtered synthetic regime, and both are rare classes.
+
+Furthermore, filtered synthetic does not show significant improvement over unfiltered
+synthetic. vasc and bkl are the only classes to increase their F1 after the filter is
+applied; bkl's F1 increases by only 0.013, so caution should be taken before asserting that
+the class benefits from the filter. The rare classes with low F1, akiec and df, achieve
+slightly worse results after filtration (-0.063 and -0.028 respectively), so there is no
+reason to conclude that removing copies improves classification for these classes. When
+evaluating the synthetic datasets against the duplicated-real one, the first table shows
+rare-class F1 within one standard deviation of each other. These calculations include vasc,
+which is an outlier among rare classes as the only one with high F1. vasc's F1 improves
+monotonically from duplicated-real to unfiltered synthetic to filtered synthetic, as our
+experiment predicted, but the other rare classes decrease monotonically in the same
+direction, so the use of diffusion to compensate for poor classification in rare classes
+might be even worse than the aggregate results show. All three added-data regimes also
+have mean rare-class F1 below the no-augmentation reference. In addition, classical
+augmentation achieves the best F1 for every class, and the lowest-scoring classes across
+all regimes, akiec and df, have the biggest improvements under classical augmentation
+relative to the other regimes (+0.255 and +0.327 over the reference, compared to +0.183,
++0.143, +0.120, +0.024, and +0.111 for bcc, bkl, mel, nv, and vasc respectively).
+
 ## 7. Discussion
 
 **Plausible mechanism.** Class-balanced sampling, our deliberate defense against rare-class
@@ -325,6 +364,50 @@ plausible contributor to the inverse class-size pattern. Exposure and class size
 however, and there is no natural-frequency control, so this study cannot identify balancing
 as the cause. The supported scope is narrower: in this one 37M-parameter from-scratch DDPM
 run, the smallest classes have the highest calibrated detection rates.
+
+**Duplicated-real vs filtered synthetic.** This is the main comparison our paper focuses
+on. Removing near-copies from the synthetic dataset ensures that the augmentation is only
+images new to the classifier, and duplicating real images eliminates any differences caused
+by dataset size without adding any new information, so this comparison examines solely
+whether the generator can contribute meaningful information to the classifier. Based on our
+results, we cannot conclude that this is the case. The average F1 for rare classes is near
+identical, and filtered synthetic augmentation might have a negative effect on classes with
+poor classification. A possible explanation, consistent with the high rare-class flag rates
+of Section 5, is that with so few training images the diffusion model cannot learn abstract
+features, so its high-quality rare-class output is mostly near-copies. When those are
+filtered out, much of the remaining synthetic data does not accurately represent the class,
+and adding false information is no better than adding no information.
+
+**Filtered vs unfiltered synthetic.** Comparing the classifiers trained on the synthetic
+dataset before and after near-copies are removed isolates the effect of our filtering
+process. We fail to demonstrate that this process improves classification, and even have
+some evidence to the contrary: removing near-copies increases the proportion of data taken
+up by inaccurate images. The differences between these regimes are small, however, so it is
+possible that the classifier is resilient to this. Another explanation for the similarity
+is that both regimes have drawbacks that somewhat cancel: the unfiltered dataset has
+significantly more images than the filtered one, so it may have lower information density
+but more volume, while filtering may increase the density of useful information but leave
+fewer images to train on.
+
+**Real vs synthetic.** Our two synthetic datasets perform very similarly on the rare
+classes to simply duplicating real data to match the size of the filtered synthetic
+dataset, and the only class that contributes a difference in favor of the synthetic
+datasets is not poorly classified at all. Arguably, every class this experiment aims to
+help performs worse on the synthetic datasets. The intuitive reason would be that if the
+diffusion model could learn the necessary features from only the real images, the dataset
+already contains all the information the classifier needs. That is not necessarily true,
+since the two models have different internal representations, which is why experimentation
+is needed to check the intuition: classical augmentation, which also generates no original
+information, significantly improves classification. Training generative models on the same
+dataset as the classifier is therefore not inherently pointless and should remain a topic
+of study.
+
+**Recommendation.** Based on our results we cannot recommend diffusion models as a way to
+augment class-imbalanced data. We are unable to produce results supporting improved
+classification over the unaugmented dataset, and given the significant computational cost
+of training and running a generative model, definitive gains would be necessary to justify
+it. Of the augmentation methods tested, classical augmentation is the clear winner: the
+best F1 for every class at low cost.
 
 **Future scope, and why we did not retrain.** The candidate mitigations, in the order we
 would try them, are
