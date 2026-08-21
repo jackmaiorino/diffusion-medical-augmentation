@@ -120,10 +120,12 @@ or results whose formal hyperparameters differ from the command above. GPU
 ordinal, output path, and data-loader worker count are execution settings, not
 aggregation keys.
 
-Plot the DDPM and classifier training loss curves, and re-check any saved
-checkpoint against its recorded test metrics:
+Score the saved DDPM checkpoints on the validation split, plot the loss
+curves, and re-check any saved classifier checkpoint against its recorded
+test metrics:
 
 ```powershell
+.\.venv\Scripts\python.exe src\ddpm_val_loss.py --device cuda
 .\.venv\Scripts\python.exe reports\loss_figure.py
 .\.venv\Scripts\python.exe src\eval_classifier.py --run runs\classifier\classical_aug_s612
 ```
