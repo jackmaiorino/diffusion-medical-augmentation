@@ -27,9 +27,9 @@ h1 { font-size: 17pt; margin: 0 0 0.3em; line-height: 1.25; }
 h2 { font-size: 13pt; margin: 1.5em 0 0.4em; border-bottom: 1px solid #ccc;
      padding-bottom: 0.15em; page-break-after: avoid; }
 h3 { font-size: 11.5pt; margin: 1.2em 0 0.3em; page-break-after: avoid; }
-p { margin: 0.5em 0; text-align: justify; }
+p { margin: 0.5em 0; }
 code { font-family: "Consolas", monospace; font-size: 9pt; background: #f4f4f4;
-       padding: 0.1em 0.3em; border-radius: 2px; }
+       padding: 0.1em 0.15em; border-radius: 2px; hyphens: none; }
 pre { background: #f7f7f7; border: 1px solid #e0e0e0; border-radius: 3px;
       padding: 0.6em 0.8em; font-size: 8.5pt; line-height: 1.35; overflow-x: auto;
       page-break-inside: avoid; }
@@ -73,6 +73,16 @@ def find_chrome() -> Path:
         if candidate.exists():
             return candidate
     sys.exit("Chrome not found. Edit CHROME_CANDIDATES in build_pdf.py.")
+
+
+def break_inline_paths(html: str) -> str:
+    """Let inline code paths wrap after slashes so justified lines don't stretch."""
+
+    def add_breaks(match: re.Match) -> str:
+        return "<code>" + match.group(1).replace("/", "/<wbr>") + "</code>"
+
+    # only inline <code>; fenced blocks render as <pre><code> and wrap on their own
+    return re.sub(r"(?<!<pre>)<code>([^<]*)</code>", add_breaks, html)
 
 
 def embed_images(html: str, base_dir: Path) -> str:
@@ -137,9 +147,10 @@ def main() -> None:
     )
     body = restore_mermaid(body, diagrams)
     body = embed_images(body, src.parent)
+    body = break_inline_paths(body)
 
     html = (
-        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
         f"<title>{src.stem}</title><style>{CSS}</style>"
         f"{MERMAID_INIT if n_diagrams else ''}"
         f"</head><body>{body}</body></html>"
