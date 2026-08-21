@@ -77,9 +77,26 @@ gradient accumulation, which avoids VRAM spill on our 12 GB GPU), EMA decay 0.99
 13.0 hours on a single GPU. Sampling uses DDIM (Song et al., 2021) at 50 steps with
 guidance 2.0 and seed 612; we generated 1,000 images per class.
 
+Figure 1 shows the loss curves. DDPM training loss falls throughout the run, from a mean
+of 0.025 over the first 5k steps to 0.0085 near 100k. Validation loss, scored at each
+saved checkpoint on the held-out split under identical noise, timestep, and label-drop
+draws so the curve is comparable across checkpoints, is flat at 0.020 from the first
+checkpoint (epoch 46) to the last (epoch 917). The widening train-validation gap means
+the second half of training improves the fit to the training images, not to the
+distribution; Section 5.3 shows the same pattern at the image level, where copying rises
+across exactly these checkpoints. The classifier arms are trained by steps rather than
+epochs because the five arms have different dataset sizes; validation macro-F1, logged
+every 250 steps, selects each run's checkpoint (Section 6).
+
+![Training and validation loss curves](loss_curves.png)
+
+*Figure 1. Left: DDPM diffusion loss vs epoch, training (per-step) and validation (per
+saved checkpoint, 4 fixed passes over the val split). Right: classifier training loss
+for the five arms, 3-seed mean. Both y-axes are log scale.*
+
 ![Samples from the final checkpoint, one row per class](ddpm_samples_100k.png)
 
-*Figure 1. EMA samples at 100k steps, guidance 2.0. Legible lesion morphology in every
+*Figure 2. EMA samples at 100k steps, guidance 2.0. Legible lesion morphology in every
 class; the question the rest of the report answers is where that morphology comes from.*
 
 ## 4. Generative Quality by the Standard Metrics
@@ -150,12 +167,12 @@ repeated exposure: under class-balanced sampling over 100k steps, each df traini
 presented roughly 11,000 times. Class size and per-image exposure are coupled in this design,
 however, so this run does not identify the cause of the association. Visual inspection of
 the worst and near-threshold examples supports the copy interpretation and suggests that the
-threshold can miss visually similar pairs (Figure 2). Only nv, with 4,679 training images,
+threshold can miss visually similar pairs (Figure 3). Only nv, with 4,679 training images,
 stays below the nominal false-positive band.
 
 ![Flagged generated images beside their nearest training images](memcheck_worst_pairs.png)
 
-*Figure 2. The lowest-distance flagged pairs: each column pairs a generated image with its
+*Figure 3. The lowest-distance flagged pairs: each column pairs a generated image with its
 nearest real training image. These are near-pixel copies.*
 
 The copying is broad, not collapse onto a few prototypes: df's flags trace back to 81 of its
@@ -165,7 +182,7 @@ the df and vasc training sets rather than a few sources.
 
 ### 5.3 Copying rises as train-referenced KID falls
 
-We scored checkpoints from 10k to 100k steps, plus a guidance 1.0 probe at 100k (Figure 3).
+We scored checkpoints from 10k to 100k steps, plus a guidance 1.0 probe at 100k (Figure 4).
 Flag rates generally rise with training while train-referenced KID falls. But these two
 curves are not independent: copies are close to the empirical training distribution by
 definition, so train-KID improves as copying worsens. The trajectory is also not perfectly
@@ -177,7 +194,7 @@ are faithful by copying.
 
 ![Copy rate and train-KID across checkpoints](memorization_sweep.png)
 
-*Figure 3. Left: lesion-calibrated flag rate. Right: KID x1000 vs train. Open markers:
+*Figure 4. Left: lesion-calibrated flag rate. Right: KID x1000 vs train. Open markers:
 guidance 1.0 at 100k. Copying and train-referenced "quality" improve together, which is
 exactly why train-referenced quality cannot be trusted here.*
 
@@ -346,7 +363,7 @@ inventory, not execution attestation.
   manifest each; validation selects checkpoints, not mixing ratios. The 0/25/50/100% ratio
   sweep and the 25/50/100% generator sample-size study were not run.
 - **The guidance sweep narrowed.** Instead of {1.0, 2.0, 3.0} for sample quality, we probed
-  guidance 1.0 specifically for its effect on copying (Figure 3).
+  guidance 1.0 specifically for its effect on copying (Figure 4).
 
 ## 9. Related Work
 
